@@ -97,7 +97,7 @@ class TaskbarCenter:
         return True
 
 
-    def icons(self, control):
+    def icons(self, control) -> list[uiautomation.Control]:
         icons = control.GetChildren()
         icons = [i for i in icons if i.ControlType == BUTTON]
         zeros = [i for i in [icon.BoundingRectangle.width() for icon in icons] if i == 0]
