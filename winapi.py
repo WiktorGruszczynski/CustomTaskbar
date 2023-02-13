@@ -1,8 +1,29 @@
 import ctypes
-from ctypes.wintypes import RECT
+from ctypes.wintypes import *
 
 
 user32 = ctypes.windll.user32
+
+class WINDOWPLACEMENT(ctypes.Structure):
+    _fields_ = [
+        ('length', ctypes.c_ulong),
+        ('flags', ctypes.c_ulong),
+        ('showCmd', ctypes.c_ulong),
+        ('ptMinPosition', POINT),
+        ('ptMaxPosition', POINT),
+        ('rcNormalPosition', RECT),
+    ]
+
+
+
+class Placement():
+    def __init__(self, lenght:int, flags:int, showCmd:int, ptMinPosition:POINT, ptMaxPosition:POINT, rcNormalPosition:RECT) -> None:
+        self.lenght = lenght
+        self.flags = flags
+        self.showCmd = showCmd
+        self.ptMinPosition = ptMinPosition.x, ptMinPosition.y
+        self.ptMaxPosition = ptMaxPosition.x, ptMaxPosition.y
+        self.rect = rcNormalPosition.left, rcNormalPosition.top, rcNormalPosition.right, rcNormalPosition.bottom
 
 
 def FindWindow(class_name:str=None, window_name:str=None) -> int:
@@ -33,7 +54,7 @@ def GetClassName(handle:int):
     return class_name.value
 
 
-def getWindowText(hwnd:int):
+def GetWindowText(hwnd:int):
     length = user32.GetWindowTextLengthW(hwnd)
     title = ctypes.create_unicode_buffer(length + 1)
     user32.GetWindowTextW(hwnd, title, length + 1)
@@ -44,9 +65,11 @@ def IsWindowVisible(handle:int):
     return user32.IsWindowVisible(handle)
 
 
-def EnumWindows(callback, param=None):
-    user32.EnumWindows(callback, param)
-
-
 def GetSystemMetrics(index:int):
     return user32.GetSystemMetrics(index)
+
+
+def GetWindowPlacement(hwnd):
+    placement = WINDOWPLACEMENT()
+    user32.GetWindowPlacement(hwnd, ctypes.byref(placement))
+    return Placement(ctypes.sizeof(WINDOWPLACEMENT), placement.flags, placement.showCmd, placement.ptMinPosition, placement.ptMaxPosition, placement.rcNormalPosition)
