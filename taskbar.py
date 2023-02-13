@@ -7,7 +7,7 @@ from threading import Thread
 
 
 BUTTON = 0xc350
-SCREEN = (winapi.GetSystemMetrics(0), winapi.GetSystemMetrics(1))
+SCREEN = winapi.GetSystemMetrics(0), winapi.GetSystemMetrics(1)
 ADVANCED = "SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
 DEAFULT_SPEED = 50
 
