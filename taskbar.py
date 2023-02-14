@@ -1,15 +1,19 @@
-import uiautomation 
-import winapi
-import time
+from threading import Thread
+import uiautomation
 import winreg
 import process
-from threading import Thread
+import platform
+import winapi
+import time
 
 
 BUTTON = 0xc350
 SCREEN = winapi.GetSystemMetrics(0), winapi.GetSystemMetrics(1)
 ADVANCED = "SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
 DEAFULT_SPEED = 50
+OS_NAME = f"{platform.system()} {platform.release()}"
+
+
 
 def apply():
     pid = process.find("explorer.exe")[1]
@@ -88,6 +92,10 @@ class TaskbarCenter:
         else:
             return "vertical"
 
+    @property
+    def StartButtonSize(self):
+        StartBtnRect = self.StartButton.rect
+        return (StartBtnRect[2]-StartBtnRect[0], StartBtnRect[3]-StartBtnRect[1])
 
     def clickable(self, elements):
         for e in elements:
@@ -96,152 +104,133 @@ class TaskbarCenter:
                 return False
         return True
 
-
     def icons(self, control) -> list[uiautomation.Control]:
         icons = control.GetChildren()
         icons = [i for i in icons if i.ControlType == BUTTON]
-        zeros = [i for i in [icon.BoundingRectangle.width() for icon in icons] if i == 0]
-
-        if zeros != []:
-            return self.icons(control)
 
         if self.clickable(icons) == False:
             return self.icons(control)
 
-        StartBtnRect = self.StartButton.rect
-        Startbtn = StartBtnRect[2]-StartBtnRect[0], StartBtnRect[3]-StartBtnRect[1]
-
-        for i, icon in enumerate(icons):
-            if icon.BoundingRectangle.width()<Startbtn[0] or icon.BoundingRectangle.height()<Startbtn[1]:
-                icons.pop(i)
-                break
-        
         return icons 
-
 
     def icons_width(self, control):
         icons = self.icons(control)
         left = icons[0].BoundingRectangle.left
         right = icons[-1].BoundingRectangle.right
-        return right-left
 
+        btn = self.StartButtonSize[0]
+        for icon in icons:
+            icon_width = icon.BoundingRectangle.width()
+            if icon_width<btn and right-left>0:
+                return right-left-icon_width
+
+        return right-left
 
     def icons_height(self, control):    
         icons = self.icons(control)
         top = icons[0].BoundingRectangle.top
         bot = icons[-1].BoundingRectangle.bottom
+
+        btn = self.StartButtonSize[1]
+        for icon in icons:
+            icon_height = icon.BoundingRectangle.height()
+            if icon_height<btn and bot-top>0:
+                return bot-top-icon_height
+
         return bot-top
 
+    def CalcDelay(self, distance):
+        delay = (distance/self.speed)/1000
+        if delay<0:
+            delay = -delay
+        return delay
+
+
     def Xcenter(self, control):
-        return (SCREEN[0]-self.icons_width(control))//2
+        x = self.icons_width(control)
+        if x<0:
+            return self.Xcenter(control)
+        return (SCREEN[0]-x)//2
+
 
     def Ycenter(self, control):
-        return (SCREEN[1]-self.icons_height(control))//2
+        y = self.icons_height(control)
+        if y<0:
+            return self.Ycenter(control)
+        return (SCREEN[1]-y)//2
 
 
-    def CenterPrimary(self):
-        rect = self.MSTaskSwWClass.rect
+    def AnimateMovement(self, handle, x, y, rect, icons_rect):
+        deltaX = x-icons_rect[0]
+        deltaY = y-icons_rect[1]
         width = rect[2]-rect[0]
         height = rect[3]-rect[1]
-        icons_rect = self.MSTaskListWClass.rect
 
-        if self.orientation == "horizontal":
-            x = self.Xcenter(self.control)
-            deltaX = x-icons_rect[0]
+        if deltaX!=0 and y==0:
+            delay = self.CalcDelay(deltaX)
+            start = time.time()
+            timings = [start+(delay*i) for i in range(1, self.frames+1)]
 
-            if deltaX!=0:
-                if not self.animation:
-                    winapi.SetWindowPos(self.MSTaskListWClass.hwnd, x-rect[0], 0, width, height)
-                else:
-                    delay = (deltaX/self.speed)/1000
-                    if delay<0:
-                        delay = -delay
+            for i in range(1, self.frames+1):
+                winapi.SetWindowPos(handle, round(i/self.frames*deltaX)-rect[0]+icons_rect[0], y, width, height)
+                while time.time()<timings[i-1]:   
+                    pass
+        
+        elif deltaY!=0 and x==0:
+            delay = self.CalcDelay(deltaY)
+            start = time.time()
+            timings = [start+(delay*i) for i in range(1, self.frames+1)]
 
-                    start = time.time()
-                    timings = [start+(delay*i) for i in range(1, self.frames+1)]
+            for i in range(1, self.frames+1):
+                winapi.SetWindowPos(handle, x, round(i/self.frames*deltaY)-rect[1]+icons_rect[1], width, height)
+                print(i)
+                while time.time()<timings[i-1]:   
+                    pass
 
-                    for i in range(1, self.frames+1):
-                        winapi.SetWindowPos(self.MSTaskListWClass.hwnd, round(i/self.frames*deltaX)-rect[0]+icons_rect[0], 0, width, height)
-                        while time.time()<timings[i-1]:   
-                            pass
-                     
+    def center(self, taskbar:Window, tasklist:Window, control, MonitorAdjustment=False):
+        if OS_NAME == "Windows 11":
+            pass
         else:
-            y = self.Ycenter(self.control)
-            deltaY = y-icons_rect[1]
-            if deltaY!=0:
-                if not self.animation:
-                    winapi.SetWindowPos(self.MSTaskListWClass.hwnd, 0, y-rect[1], width, height)
-                else:
-                    delay = (deltaY/self.speed)/1000
-                    if delay<0:
-                        delay = -delay
+            taskrect = taskbar.rect
+            icons_rect = tasklist.rect
+            handle = tasklist.hwnd
 
-                    start = time.time()
-                    timings = [start+(delay*i) for i in range(1, self.frames+1)]
+            if MonitorAdjustment:
+                PrimaryTaskbarRect = self.Shell_TrayWnd.rect
+                SecondaryTaskbarRect = self.Shell_SecondaryTrayWnd.rect
+                AdjustX = SecondaryTaskbarRect[0]-PrimaryTaskbarRect[0]
+                AdjustY = SecondaryTaskbarRect[1]-PrimaryTaskbarRect[1]
+            else:
+                AdjustX, AdjustY = 0,0
 
-                    for i in range(1, self.frames+1):
-                        winapi.SetWindowPos(self.MSTaskListWClass.hwnd, 0, round(i/self.frames*deltaY)-rect[1]+icons_rect[1], width, height)
-                        while time.time()<timings[i-1]:   
-                            pass
+            if self.orientation == "horizontal":
+                x = self.Xcenter(control)
+                deltaX = x-icons_rect[0]
+
+                if deltaX!=0:
+                    if not self.animation:
+                        winapi.SetWindowPos(handle, x-taskrect[0], 0, taskrect[2]-taskrect[0]+AdjustX, taskrect[3]-taskrect[1])
+                    else:
+                        self.AnimateMovement(handle, x+AdjustX, 0, taskrect, icons_rect)
+            else:
+                y = self.Ycenter(self.control)
+                deltaY = y-icons_rect[1]
+
+                if deltaY!=0:
+                    if not self.animation:
+                        winapi.SetWindowPos(handle, x-taskrect[0], 0, taskrect[2]-taskrect[0]+AdjustY, taskrect[3]-taskrect[1])
+                    else:
+                        self.AnimateMovement(handle, 0, y+AdjustY, taskrect, icons_rect)
+    
+    def CenterPrimary(self):
+        self.center(self.MSTaskSwWClass, self.MSTaskListWClass, self.control)
 
     def CenterSecondary(self):
-        rect = self.workew.rect
-        width = rect[2]-rect[0]
-        height = rect[3]-rect[1]
-        icons_rect = self.MSTaskListWClass_2.rect
-        PrimaryTaskbarRect = self.Shell_TrayWnd.rect
-        SecondaryTaskbarRect = self.Shell_SecondaryTrayWnd.rect
-        
-
-        if self.orientation == "horizontal":
-            x = self.Xcenter(self.control_2)
-            monitor_adjustment = SecondaryTaskbarRect[0]-PrimaryTaskbarRect[0]
-            deltaX = x-icons_rect[0]+monitor_adjustment
-
-            if deltaX!=0:
-                if not self.animation:
-                    winapi.SetWindowPos(self.MSTaskListWClass_2.hwnd, x-rect[0]+monitor_adjustment, 0, width, height)
-                else:
-                    delay = (deltaX/self.speed)/1000
-                    if delay<0:
-                        delay = -delay
-
-                    start = time.time()
-                    timings = [start+(delay*i) for i in range(1, self.frames+1)]
-
-                    for i in range(1, self.frames+1):
-                        x = round(i/self.frames*deltaX)-rect[0]+icons_rect[0]
-                        winapi.SetWindowPos(self.MSTaskListWClass_2.hwnd, x, 0, width, height) 
-                        while time.time()<timings[i-1]:   
-                            pass
-  
-            
-        else:
-            y = self.Ycenter(self.control_2)
-            monitor_adjustment = SecondaryTaskbarRect[1]-PrimaryTaskbarRect[1]
-            deltaY = y-icons_rect[1]+monitor_adjustment
-
-            if deltaY!=0:
-                if not self.animation:
-                    winapi.SetWindowPos(self.MSTaskListWClass_2.hwnd, 0, y-rect[1]+monitor_adjustment, width, height)
-                else:
-                    delay = (deltaY/self.speed)/1000
-                    if delay<0:
-                        delay = -delay
-
-                    start = time.time()
-                    timings = [start+(delay*i) for i in range(1, self.frames+1)]
-
-                    for i in range(1, self.frames+1):
-                        y = round(i/self.frames*deltaY)-rect[1]+icons_rect[1]
-                        winapi.SetWindowPos(self.MSTaskListWClass_2.hwnd, 0, y, width, height)
-                        while time.time()<timings[i-1]:   
-                            pass
-
-
-
+        self.center(self.workew, self.MSTaskListWClass_2, self.control_2, MonitorAdjustment=True)
+    
+   
 if __name__ == "__main__":
-    task=TaskbarCenter(animation=True,speed=50)
+    task=TaskbarCenter(animation=True, speed=50)
 
     def loop_primary():
         while True:
@@ -261,5 +250,4 @@ if __name__ == "__main__":
     secondary=Thread(target=loop_secondary)
 
     primary.start()
-    secondary.start()
-
+    secondary.start() 
