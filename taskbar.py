@@ -295,7 +295,7 @@ class TaskbarCenter:
 
             if deltaY!=0 and abs(deltaY)>2:
                 if not self.animation:
-                    winapi.SetWindowPos(handle, 0, y+AdjustY, taskrect[2]-taskrect[0]+AdjustY, taskrect[3]-taskrect[1])
+                    winapi.SetWindowPos(handle, 0, y+AdjustY-taskrect[1], taskrect[2]-taskrect[0]+AdjustY, taskrect[3]-taskrect[1])
                 else:      
                     self.AnimateMovement(handle, 0, y+AdjustY, taskrect, icons_rect)
     
