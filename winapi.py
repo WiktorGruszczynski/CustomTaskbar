@@ -6,7 +6,7 @@ user32 = ctypes.windll.user32
 gdi32 = ctypes.windll.gdi32
 
 HWND_BOTTOM = 1
-SWP_ASYNCWINDOWPOS=0x4000
+SWP_ASYNCWINDOWPOS = 0x4000
 
 def FindWindow(class_name:str=None, window_name:str=None) -> int:
     return user32.FindWindowW(class_name, window_name)
