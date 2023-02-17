@@ -31,6 +31,25 @@ ADVANCED = "SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
 THEMES = "SOFTWARE\Microsoft\Windows\CurrentVersion\Themes"
 
 
+class Window:
+    def __init__(self, name:str=None, class_name:str=None, hwnd:int=None) -> None:
+        if not hwnd:
+            hwnd = winapi.FindWindow(class_name, name)
+
+        self.name = name
+        self.class_name = class_name
+        self.hwnd=hwnd
+
+    @property
+    def rect(self):
+        return winapi.GetWindowRect(self.hwnd)
+
+    def child(self, window_name=None, class_name=None):
+        ChildHwnd = winapi.FindWindowEx(self.hwnd, None, class_name, window_name)
+        name = winapi.GetWindowText(ChildHwnd)
+        class_name = winapi.GetClassName(ChildHwnd)
+        return Window(name, class_name, ChildHwnd)
+
 
 def GetMonitorFrequency():
     hdc = winapi.GetDC(0)
@@ -80,30 +99,27 @@ def disable_transparency():
     SetRegistryValue(THEMES+"\\Personalize", "EnableTransparency", int(False))
 
 
+def notify_box(hidden=False):
+    traynotify=Window(class_name="Shell_TrayWnd").child(class_name="TrayNotifyWnd")
+    winapi.SetWindowPos(traynotify.hwnd, traynotify.rect[0], int(hidden)*10000, 0, 0, flags=winapi.SWP_NOSIZE)
+
+
+def win_button(hidden=False, index=0):
+    if index == 0:
+        class_name = "Shell_TrayWnd"
+    elif index == 1:
+        class_name = "Shell_SecondaryTrayWnd"
+    else: return 1
+
+    taskbar = Window(class_name=class_name) 
+    windows_button = taskbar.child("Start")
+
+    winapi.SetWindowPos(windows_button.hwnd, taskbar.rect[0] - windows_button.rect[0], int(hidden)*10000, 0, 0, flags=winapi.SWP_NOSIZE)
+    
+
+
 def win11_center(value:bool):
     SetRegistryValue(ADVANCED, "TaskbarAl", int(value))
-
-
-
-
-class Window:
-    def __init__(self, name:str=None, class_name:str=None, hwnd:int=None) -> None:
-        if not hwnd:
-            hwnd = winapi.FindWindow(class_name, name)
-
-        self.name = name
-        self.class_name = class_name
-        self.hwnd=hwnd
-
-    @property
-    def rect(self):
-        return winapi.GetWindowRect(self.hwnd)
-
-    def child(self, window_name=None, class_name=None):
-        ChildHwnd = winapi.FindWindowEx(self.hwnd, None, class_name, window_name)
-        name = winapi.GetWindowText(ChildHwnd)
-        class_name = winapi.GetClassName(ChildHwnd)
-        return Window(name, class_name, ChildHwnd)
 
 
 
