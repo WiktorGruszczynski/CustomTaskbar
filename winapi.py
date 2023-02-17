@@ -1,30 +1,12 @@
 import ctypes
-from ctypes.wintypes import *
+from ctypes.wintypes import RECT
 
 
 user32 = ctypes.windll.user32
+gdi32 = ctypes.windll.gdi32
 
-class WINDOWPLACEMENT(ctypes.Structure):
-    _fields_ = [
-        ('length', ctypes.c_ulong),
-        ('flags', ctypes.c_ulong),
-        ('showCmd', ctypes.c_ulong),
-        ('ptMinPosition', POINT),
-        ('ptMaxPosition', POINT),
-        ('rcNormalPosition', RECT),
-    ]
-
-
-
-class Placement():
-    def __init__(self, lenght:int, flags:int, showCmd:int, ptMinPosition:POINT, ptMaxPosition:POINT, rcNormalPosition:RECT) -> None:
-        self.lenght = lenght
-        self.flags = flags
-        self.showCmd = showCmd
-        self.ptMinPosition = ptMinPosition.x, ptMinPosition.y
-        self.ptMaxPosition = ptMaxPosition.x, ptMaxPosition.y
-        self.rect = rcNormalPosition.left, rcNormalPosition.top, rcNormalPosition.right, rcNormalPosition.bottom
-
+HWND_BOTTOM = 1
+SWP_ASYNCWINDOWPOS=0x4000
 
 def FindWindow(class_name:str=None, window_name:str=None) -> int:
     return user32.FindWindowW(class_name, window_name)
@@ -40,36 +22,35 @@ def GetWindowRect(handle:int):
     return (rect.left, rect.top, rect.right, rect.bottom)
 
 
-def MoveWindow(hwnd:int, x:int, y:int, width:int, height:int, repaint:bool):
-     user32.MoveWindow(hwnd, x, y, width, height, repaint)
+def SetWindowPos(hwnd:int, x:int, y:int, width:int, height:int, flags=SWP_ASYNCWINDOWPOS, insert_after=HWND_BOTTOM):
+    user32.SetWindowPos(hwnd, insert_after, x, y, width, height, flags)
 
 
-def SetWindowPos(hwnd:int, x:int, y:int, width:int, height:int, flags=0x4000):
-    user32.SetWindowPos(hwnd, 0, x, y, width, height, flags)
-
-
-def GetClassName(handle:int):
+def GetClassName(handle:int) -> str:
     class_name = ctypes.create_unicode_buffer(256)
     user32.GetClassNameW(handle, class_name, ctypes.sizeof(class_name))
     return class_name.value
 
 
-def GetWindowText(hwnd:int):
+def GetWindowText(hwnd:int) -> str:
     length = user32.GetWindowTextLengthW(hwnd)
     title = ctypes.create_unicode_buffer(length + 1)
     user32.GetWindowTextW(hwnd, title, length + 1)
     return title.value
 
 
-def IsWindowVisible(handle:int):
-    return user32.IsWindowVisible(handle)
-
-
-def GetSystemMetrics(index:int):
+def GetSystemMetrics(index:int) -> int:
     return user32.GetSystemMetrics(index)
 
 
-def GetWindowPlacement(hwnd):
-    placement = WINDOWPLACEMENT()
-    user32.GetWindowPlacement(hwnd, ctypes.byref(placement))
-    return Placement(ctypes.sizeof(WINDOWPLACEMENT), placement.flags, placement.showCmd, placement.ptMinPosition, placement.ptMaxPosition, placement.rcNormalPosition)
+def GetDC(_NamedFuncPointer=None):
+    return user32.GetDC(_NamedFuncPointer)
+
+
+def ReleaseDC(hdc):
+    user32.ReleaseDC(None, hdc)
+
+
+def GetDeviceCaps(hdc:int, index:int) -> int:
+    return gdi32.GetDeviceCaps(hdc, index)
+
