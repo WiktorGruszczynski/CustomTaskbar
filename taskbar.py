@@ -8,16 +8,16 @@ import time
 import os
 
 
+
 config_path = ".cfg"
 deafult_config = [
     'animation=True',
     'align_center=True',
     'align_primary=True',
     'align_secondary=True',
-    'refresh_rate=0.25',
-    'speed=50',
-    'offset=0'
-]
+    'refresh_rate=0.2',
+    'speed=200',
+    'offset=0']
 
 
 BUTTON = 0xc350
@@ -99,9 +99,11 @@ def disable_transparency():
     SetRegistryValue(THEMES+"\\Personalize", "EnableTransparency", int(False))
 
 
-def notify_box(hidden=False):
+def hide_TrayNotifyWnd():
     traynotify=Window(class_name="Shell_TrayWnd").child(class_name="TrayNotifyWnd")
-    winapi.SetWindowPos(traynotify.hwnd, traynotify.rect[0], int(hidden)*10000, 0, 0, flags=winapi.SWP_NOSIZE)
+    winapi.SendMessage(traynotify.hwnd, 15, False, 0)
+    rect=traynotify.rect
+    winapi.SetWindowPos(traynotify.hwnd, rect[0], 120, 0, 0, flags=winapi.SWP_NOSIZE)
 
 
 def win_button(hidden=False, index=0):
@@ -137,19 +139,21 @@ class TaskbarCenter:
             self.fps = GetMonitorFrequency()
             self.frametime = 1/self.fps
         except:
-            time.sleep(1)
+            time.sleep(0.5)
             return self.GetFPS()
 
 
     def load_handles(self):
         self.Shell_TrayWnd = Window(class_name="Shell_TrayWnd")
+        self.StartButton = self.Shell_TrayWnd.child(class_name="Start")
         self.Shell_SecondaryTrayWnd = Window(class_name="Shell_SecondaryTrayWnd")
         self.ReBarWindow32 = self.Shell_TrayWnd.child(class_name="ReBarWindow32")
         self.MSTaskSwWClass = self.ReBarWindow32.child(class_name="MSTaskSwWClass")
         self.MSTaskListWClass = self.MSTaskSwWClass.child(class_name="MSTaskListWClass")
-        self.StartButton = self.Shell_TrayWnd.child(class_name="Start")
         self.control = uiautomation.ControlFromHandle(self.MSTaskListWClass.hwnd)
         
+        winapi.SendMessage(self.ReBarWindow32.hwnd, winapi.WM_REPAINT, False, 0)
+
         if self.Shell_SecondaryTrayWnd:
             self.workew = self.Shell_SecondaryTrayWnd.child(class_name="WorkerW")
             self.MSTaskListWClass_2 = self.workew.child(class_name="MSTaskListWClass")
@@ -171,23 +175,10 @@ class TaskbarCenter:
         StartBtnRect = self.StartButton.rect
         return (StartBtnRect[2]-StartBtnRect[0], StartBtnRect[3]-StartBtnRect[1])
 
-    def clickable(self, elements):
-        for e in elements:
-            isclickable = e.GetClickablePoint()[2]
-            
-            if isclickable == False:
-                return False
-
-        return True
 
     def icons(self, control) -> list[uiautomation.Control]:
-        icons = control.GetChildren()
+        icons:list[uiautomation.Control] = control.GetChildren()
         icons = [i for i in icons if i.ControlType == BUTTON or i.ControlType == MENU_ITEM]
-
-        if self.clickable(icons) == False:
-            return self.icons(control)
-
-
         return icons 
 
     def icons_width(self, control):
@@ -240,29 +231,31 @@ class TaskbarCenter:
     def AnimateMovement(self, handle, x, y, rect, icons_rect):
         deltaX = x-icons_rect[0]
         deltaY = y-icons_rect[1]
-        width = rect[2]-rect[0]
-        height = rect[3]-rect[1]
 
-        if deltaX!=0 and y==0:
+        if deltaX!=0 and y==0:  
             frames = self.n_frames(deltaX)
+            if deltaX>SCREEN[0]/5:
+                frames = int(frames/4)+1
+
             start = time.time()
             timings = [start+(self.frametime*(i+1)) for i in range(frames)]
 
-
             for i in range(frames):
-                winapi.SetWindowPos(handle, round((i+1)/frames*deltaX)-rect[0]+icons_rect[0], y, width, height)
+                winapi.SetWindowPos(handle, round((i+1)/frames*deltaX)-rect[0]+icons_rect[0], y, 0, 0, flags=winapi.SWP_NOSIZE)
                 while time.time()<timings[i]:   
                     pass
-
-
+                
         
         elif deltaY!=0 and x==0:
             frames = self.n_frames(deltaY)
+            if deltaY>SCREEN[1]/5:
+                frames = int(frames/4)+1
+
             start = time.time()
             timings = [start+(self.frametime*(i+1)) for i in range(frames)]
         
             for i in range(frames):
-                winapi.SetWindowPos(handle, x, round((i+1)/frames*deltaY)-rect[1]+icons_rect[1], width, height)
+                winapi.SetWindowPos(handle, x, round((i+1)/frames*deltaY)-rect[1]+icons_rect[1], 0, 0, flags=winapi.SWP_NOSIZE)
                 while time.time()<timings[i]:   
                     pass
 
@@ -281,12 +274,12 @@ class TaskbarCenter:
         
 
         if self.orientation == "horizontal":
+            
             x = self.Xcenter(control)+self.offset
             deltaX = x-icons_rect[0]
-            
             if deltaX!=0 and abs(deltaX)>2:
                 if not self.animation:
-                    winapi.SetWindowPos(handle, x-taskrect[0]+AdjustX, 0, taskrect[2]-taskrect[0]+AdjustX, taskrect[3]-taskrect[1])
+                    winapi.SetWindowPos(handle, x-taskrect[0]+AdjustX, 0, 0, 0, flags=winapi.SWP_NOSIZE)
                 else:
                     self.AnimateMovement(handle, x+AdjustX, 0, taskrect, icons_rect)
         else:
@@ -295,7 +288,7 @@ class TaskbarCenter:
 
             if deltaY!=0 and abs(deltaY)>2:
                 if not self.animation:
-                    winapi.SetWindowPos(handle, 0, y+AdjustY-taskrect[1], taskrect[2]-taskrect[0]+AdjustY, taskrect[3]-taskrect[1])
+                    winapi.SetWindowPos(handle, 0, y+AdjustY-taskrect[1], 0, 0, winapi.SWP_NOSIZE)
                 else:      
                     self.AnimateMovement(handle, 0, y+AdjustY, taskrect, icons_rect)
     
@@ -307,7 +300,8 @@ class TaskbarCenter:
     def CenterSecondary(self):
         self.center(self.workew, self.MSTaskListWClass_2, self.control_2, MonitorAdjustment=True)
 
-    
+
+
     
 def UpdateConfig(new_config):
     with open(config_path, "w") as file:
@@ -391,6 +385,7 @@ class TaskbarClient:
 
     def detect_secondary(self):
         return bool(self.taskbar.Shell_SecondaryTrayWnd) 
+
 
 
 TaskbarClient()
