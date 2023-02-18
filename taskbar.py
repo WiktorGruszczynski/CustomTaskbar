@@ -1,8 +1,9 @@
-import uiautomation
 from threading import Thread
+import uiautomation
 import winreg
 import process
 import platform
+import ctypes
 import winapi
 import time
 import os
@@ -29,6 +30,8 @@ OS_NAME = f"{platform.system()} {platform.release()}"
 
 ADVANCED = "SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
 THEMES = "SOFTWARE\Microsoft\Windows\CurrentVersion\Themes"
+
+
 
 
 class Window:
@@ -82,28 +85,12 @@ def SetRegistryValue(key, subkey, value, wtype=winreg.REG_DWORD):
     winreg.SetValueEx(registry, subkey, 0, wtype, value)
 
 
-def GetRegistryValue(key, value):
-    registry = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key, 0, access=winreg.KEY_ALL_ACCESS)
-    return [i for i in EnumRegistryValues(registry) if i[0] == value][0]
-
-
-def opacity(value:int):
-    SetRegistryValue(ADVANCED, "TaskbarAcrylicOpacity", value)
-
-
 def enable_transparency():
     SetRegistryValue(THEMES+"\\Personalize", "EnableTransparency", int(True))
-
 
 def disable_transparency():
     SetRegistryValue(THEMES+"\\Personalize", "EnableTransparency", int(False))
 
-
-def hide_TrayNotifyWnd():
-    traynotify=Window(class_name="Shell_TrayWnd").child(class_name="TrayNotifyWnd")
-    winapi.SendMessage(traynotify.hwnd, 15, False, 0)
-    rect=traynotify.rect
-    winapi.SetWindowPos(traynotify.hwnd, rect[0], 120, 0, 0, flags=winapi.SWP_NOSIZE)
 
 
 def win_button(hidden=False, index=0):
@@ -111,11 +98,10 @@ def win_button(hidden=False, index=0):
         class_name = "Shell_TrayWnd"
     elif index == 1:
         class_name = "Shell_SecondaryTrayWnd"
-    else: return 1
+    else: return None
 
     taskbar = Window(class_name=class_name) 
     windows_button = taskbar.child("Start")
-
     winapi.SetWindowPos(windows_button.hwnd, taskbar.rect[0] - windows_button.rect[0], int(hidden)*10000, 0, 0, flags=winapi.SWP_NOSIZE)
     
 
@@ -123,6 +109,20 @@ def win_button(hidden=False, index=0):
 def win11_center(value:bool):
     SetRegistryValue(ADVANCED, "TaskbarAl", int(value))
 
+
+class TaskbarStyle:
+    def __init__(self) -> None:
+        self.style = None
+        self.handle = Window(class_name="Shell_TrayWnd").hwnd
+        self.secondary_handle = Window(class_name="Shell_SecondaryTrayWnd").hwnd
+        
+    #blur 3 #transparent 6
+    def set_style(self, style:int):
+        accent_policy = winapi.ACCENTPOLICY(style, 0, 0, 0)
+        data = winapi.WINCOMPATTRDATA(19, ctypes.pointer(accent_policy), ctypes.sizeof(accent_policy))
+        winapi.SetWindowCompositionAttribute(self.handle, data)
+        if self.secondary_handle:
+            winapi.SetWindowCompositionAttribute(self.secondary_handle, data)
 
 
 class TaskbarCenter:
@@ -329,6 +329,7 @@ class TaskbarClient:
     def __init__(self) -> None:
         self.load_config()
         self.taskbar = TaskbarCenter(animation=self.animation, speed=self.speed, offset=self.offset)
+        self.styler = TaskbarStyle()
         self.interval= self.interval
         self.running = True
         self.threads = [None, None]
@@ -387,5 +388,5 @@ class TaskbarClient:
         return bool(self.taskbar.Shell_SecondaryTrayWnd) 
 
 
-
-TaskbarClient()
+if __name__ == "__main__":
+    TaskbarClient()
