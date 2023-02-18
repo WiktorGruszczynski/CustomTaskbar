@@ -1,8 +1,7 @@
 from threading import Thread
 import uiautomation
-import winreg
-import process
 import platform
+import winreg
 import ctypes
 import winapi
 import time
