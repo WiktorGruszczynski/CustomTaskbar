@@ -1,7 +1,7 @@
 from threading import Thread
 import uiautomation
-import platform
 import winreg
+import platform
 import ctypes
 import winapi
 import time
@@ -17,7 +17,9 @@ deafult_config = [
     'align_secondary=True',
     'refresh_rate=0.2',
     'speed=200',
-    'offset=0']
+    'offset=0',
+    'style=0'
+]
 
 
 BUTTON = 0xc350
@@ -60,10 +62,6 @@ def GetMonitorFrequency():
     return frequency
 
 
-def apply():
-    process.refresh(pid=process.find("explorer.exe")[1])
-
-
 def EnumRegistryValues(WinregObject):
     values = []
     for i in range(1024):
@@ -84,12 +82,8 @@ def SetRegistryValue(key, subkey, value, wtype=winreg.REG_DWORD):
     winreg.SetValueEx(registry, subkey, 0, wtype, value)
 
 
-def enable_transparency():
-    SetRegistryValue(THEMES+"\\Personalize", "EnableTransparency", int(True))
-
-def disable_transparency():
-    SetRegistryValue(THEMES+"\\Personalize", "EnableTransparency", int(False))
-
+def win11_center(value:bool):
+    SetRegistryValue(ADVANCED, "TaskbarAl", int(value))
 
 
 def win_button(hidden=False, index=0):
@@ -105,23 +99,27 @@ def win_button(hidden=False, index=0):
     
 
 
-def win11_center(value:bool):
-    SetRegistryValue(ADVANCED, "TaskbarAl", int(value))
-
-
-class TaskbarStyle:
+class TaskbarStyler:
     def __init__(self) -> None:
         self.style = None
         self.handle = Window(class_name="Shell_TrayWnd").hwnd
         self.secondary_handle = Window(class_name="Shell_SecondaryTrayWnd").hwnd
+
         
-    #blur 3 #transparent 6
-    def set_style(self, style:int):
+    def set_style(self, style:int, nflags=0, ncolor=0, animationid=0):
         accent_policy = winapi.ACCENTPOLICY(style, 0, 0, 0)
         data = winapi.WINCOMPATTRDATA(19, ctypes.pointer(accent_policy), ctypes.sizeof(accent_policy))
         winapi.SetWindowCompositionAttribute(self.handle, data)
         if self.secondary_handle:
             winapi.SetWindowCompositionAttribute(self.secondary_handle, data)
+
+    def blurred(self):
+        self.set_style(3)
+
+    def transparent(self):
+        self.set_style(6)
+
+
 
 
 class TaskbarCenter:
@@ -132,6 +130,8 @@ class TaskbarCenter:
         self.GetFPS()
         self.load_handles()
 
+        if self.speed == 0:
+            self.speed = 1
 
     def GetFPS(self):
         try:
@@ -263,6 +263,7 @@ class TaskbarCenter:
         icons_rect = tasklist.rect
         handle = tasklist.hwnd
 
+
         if MonitorAdjustment:
             PrimaryTaskbarRect = self.Shell_TrayWnd.rect
             SecondaryTaskbarRect = self.Shell_SecondaryTrayWnd.rect
@@ -324,14 +325,15 @@ def ReadConfig():
 
 
 
-class TaskbarClient:
+class TaskbarClient(TaskbarCenter, TaskbarStyler):
     def __init__(self) -> None:
+        TaskbarCenter.__init__(self)
+        TaskbarStyler.__init__(self)
         self.load_config()
-        self.taskbar = TaskbarCenter(animation=self.animation, speed=self.speed, offset=self.offset)
-        self.styler = TaskbarStyle()
         self.interval= self.interval
         self.running = True
         self.threads = [None, None]
+        
         
         if self.align_center:
             if OS_NAME == "Windows 11":
@@ -346,6 +348,9 @@ class TaskbarClient:
             win11_center(False)
 
 
+        self.StylingLoop()
+
+
     def load_config(self):
         config = ReadConfig()
         self.speed = config["speed"]
@@ -355,18 +360,30 @@ class TaskbarClient:
         self.align_secondary = bool(config["align_secondary"])
         self.interval = config["refresh_rate"]
         self.offset = config["offset"]
+        self.style = config["style"]
+        self.load_style()
 
+
+    def load_style(self):
+        if self.style == 0: #deafult
+            self.style_func = None
+        elif self.style == 1: #blured
+            self.style_func = self.blurred
+        elif self.style == 2: #transparent
+            self.style_func = self.transparent
 
     def PrimaryTaskBarLoop(self):
         def callback():
             while self.running:
                 try:
-                    self.taskbar.CenterPrimary()
+                    self.CenterPrimary()
                 except Exception as err:                 
-                    self.taskbar.load_handles()
+                    self.load_handles()
+
 
                 time.sleep(self.interval)
         
+
         self.threads[0] = Thread(target=callback)
         self.threads[0].start()
 
@@ -375,7 +392,7 @@ class TaskbarClient:
         def callback():
             while self.running:
                 try:
-                    self.taskbar.CenterSecondary()
+                    self.CenterSecondary()
                 except: pass
                 
                 time.sleep(self.interval)
@@ -383,9 +400,14 @@ class TaskbarClient:
         self.threads[1] = Thread(target=callback)
         self.threads[1].start()
 
+
     def detect_secondary(self):
-        return bool(self.taskbar.Shell_SecondaryTrayWnd) 
+        return bool(self.Shell_SecondaryTrayWnd) 
 
 
-if __name__ == "__main__":
-    TaskbarClient()
+    def StylingLoop(self):
+        if self.style_func:
+            delay = 1/self.fps
+            while self.running:
+                self.style_func()
+                time.sleep(delay)
