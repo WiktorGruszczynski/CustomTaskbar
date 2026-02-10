@@ -15,7 +15,7 @@ deafult_config = [
     'animation=1',
     'align_center=1',
     'align_primary=1',
-    'align_secondary=True',
+    'align_secondary=1',
     'refresh_rate=0.2',
     'speed=200',
     'offset=0',
@@ -166,4 +166,5 @@ class TaskbarClient(TaskbarCenter, TaskbarStyler):
                     self.style_func()
                     time.sleep(delay)
         thread = Thread(target=callback)
+
         thread.start()
